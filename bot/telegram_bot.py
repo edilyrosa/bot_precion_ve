@@ -1,3 +1,10 @@
+
+# pip show python-telegram-bot
+#? -m → Para usar el pip del Python que ejecutas
+# pip install python-telegram-bot || 
+# python -m pip install python-telegram-bot
+# python -m pip install loguru 
+
 import asyncio
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
@@ -12,5 +19,52 @@ ESPERANDO_PRODUCTO_ID         = 3
 ESPERANDO_MODO_EDICION        = 4
 ESPERANDO_VALOR_PRECIO        = 5
 _propuestas_pendientes: dict[int, dict] =  {}
-_tasa_es_manual: bool = False
+_tasa_es_manual: bool = False #? Luego le hacemos toggle para ver el btn
 _umbral_actual: float = UMBRAL_VARIACION
+
+#* ─── MENÚ PRINCIPAL ───────────────────────────────────────────────────────────
+#Retornar una grid de los btn, BOTONERA
+# esto va a ser la respuesta a "/menu"
+def menu_principal_keyboard():
+    botones = [
+        [InlineKeyboardButton("📦Ver productos", callback_data="menu_ver_productos")],   #R
+        [InlineKeyboardButton("✏️Editar precio", callback_data="menu_editar_productos")], # U
+        [InlineKeyboardButton("🌀Forzar consulta BCV", callback_data="menu_forzar_bcv")], # R
+        [InlineKeyboardButton("💲Tasa manual", callback_data="menu_tasa_manual")], #? U
+        [InlineKeyboardButton("💡Cambiar umbral", callback_data="cambiar_umbral")], # U
+        [InlineKeyboardButton("📊Ver tasa actual", callback_data="ver_tasa")], # R
+    ]
+    if _tasa_es_manual:
+        botones.append([InlineKeyboardButton("Restablecer tasa BCV", callback_data="restablecer_bcv")])
+    
+    return InlineKeyboardMarkup(botones) #Botoneta contenedor de los BOTONES 
+
+#? con if-else 
+#?  callback_data=="menu_ver_productos"→ obtener_productos esta funcion debe retornar los productos de la bbdd
+#?  callback_data=="menu_editar_productos"→ actualizar_precios_ves debe modificar/actualizar/editarlos los productos de la bbdd
+#?  callback_data=="menu_forzar_bcv"→ obtener_ultima_tasa esta funcion debe retornar los productos de la bbdd
+#?  callback_data=="menu_tasa_manual"→ guardar_tasa esta funcion debe guardar la tasa digitada por el usuario.
+
+#* ─── COMANDO /START ──────────────────────────────────────────────────────────
+# CommandHandler('/start', cdm_start())  
+# Esta es la ftuncion manejadora del evento envio "/start" → sale un texto
+# es async porque el sistema debe esperar que el usuario escriba '/start' y luego el bot le responde con un mensaje de bienvenida.
+async def cdm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # el bot tiene interaccion con el usuario mediante "Update"
+    await update.message.reply_text('👋 ¡Bienvenido al Bot de Precios USD/VES! \nEscribe /menu para ver las opciones.')
+
+#* ─── COMANDO /MENU ────────────────────────────────────────────────────────────
+# Esta es la ftuncion manejadora del evento envio "/menu" → salen los botones 
+# CommandHandler('/menu', cdm_menu)  
+async def cdm_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # if _tasa_es_manual  → se lo dire
+    indicador = '⚠️ Tasa actual: establecida manualmente' if _tasa_es_manual else "🏫 Tasa actual: obtenida de BCV"
+    await update.message.reply_text(
+        f"🤖 *Bot de Precios USD/VES* \n{indicador} \n\n¿Qué deseas hacer?" ,
+        parse_mode='Markdown',
+        reply_markup=menu_principal_keyboard()
+    )
+    
+
+#* ─── ARRANQUE ─────────────────────────────────────────────────────────────────
+
