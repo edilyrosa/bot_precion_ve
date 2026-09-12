@@ -1,0 +1,33 @@
+
+# supabase → edilychile@ → python_FS356
+#* ─── POSTGRESQL (para SQLAlchemy) ────────────────────────────────────
+#TODO: python -m pip install sqlalchemy psycopg2-binary
+DATABASE_URL=postgresql://postgres.rlndbgiqcmtxyrefwujo:dLHoOSY3LNuS2QBj@aws-1-us-east-2.pooler.supabase.com:6543/postgres?sslmode=require
+# Al final de DATABASE_URL → ?sslmode=require	
+
+
+# SUPABASE_URL=https://rlndbgiqcmtxyrefwujo.supabase.co
+
+
+#* Conexion a Supabase con SQLAlchemy
+# DATABASE_URL + el driver psycopg2-binary.
+para Conectar las tablas al proyecto Py instalar: SQLAlchemy + psycopg2
+psycopg2 → el traductor, Driver que traduce Python ↔ PostgreSQL
+SQLAlchemy → el organizador, Para hablar con la BD desde Python
+
+
+#* ¿Por qué?
+# El proyecto usa SQLAlchemy (no supabase-py). SQLAlchemy se conecta directo a PostgreSQL 
+# con una cadena de conexión (DATABASE_URL).
+# SUPABASE_URL y SUPABASE_KEY son para otra forma de conectarse: 
+# la API REST que ofrece Supabase (PostgREST). Es una puerta diferente.
+
+#* Analogía:
+# Supabase es como un edificio con dos entradas:
+# Entrada REST (SUPABASE_URL + SUPABASE_KEY): Como la recepción. 
+# Le pides cosas al recepcionista y él las busca. Es más fácil pero más lenta.
+# Entrada PostgreSQL (DATABASE_URL): Como entrar directo al archivo. 
+# Más rápido y directo, pero necesitas la llave correcta.
+# Tu proyecto usa la entrada directa (PostgreSQL). Por eso solo necesita DATABASE_URL.
+
+

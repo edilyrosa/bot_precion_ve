@@ -10,8 +10,8 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
 from loguru import logger
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, UMBRAL_VARIACION
-from db.database import actualizar_precios_ves, grardar_log, get_session, obtener_productos, guardar_tasa, obtener_ultima_tasa
-
+# from db.database import actualizar_precios_ves, grardar_log, get_session, obtener_productos, guardar_tasa, obtener_ultima_tasa
+from db.database import obtener_productos_activos
 #* ----------ESTADOS -------------------------------------
 ESPERANDO_UMBRAL              = 1
 ESPERANDO_TASA_MANUAL         = 2
@@ -46,7 +46,7 @@ def menu_principal_keyboard():
 #?  callback_data=="menu_tasa_manual"→ guardar_tasa esta funcion debe guardar la tasa digitada por el usuario.
 
 #* ─── COMANDO /START ──────────────────────────────────────────────────────────
-# CommandHandler('/start', cdm_start())  
+# CommandHandler('start', cdm_start())  
 # Esta es la ftuncion manejadora del evento envio "/start" → sale un texto
 # es async porque el sistema debe esperar que el usuario escriba '/start' y luego el bot le responde con un mensaje de bienvenida.
 async def cdm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -67,4 +67,9 @@ async def cdm_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 
 #* ─── ARRANQUE ─────────────────────────────────────────────────────────────────
-
+def iniciar_bot():
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler('start', cdm_start))
+    app.add_handler(CommandHandler('menu', cdm_menu))
+    logger.info('Bot de telegran iniciado. Esperando comandos...')
+    app.run_polling(allowed_updates=Update.ALL_TYPES)  # Inicia el bot y espera comandos de los usuarios

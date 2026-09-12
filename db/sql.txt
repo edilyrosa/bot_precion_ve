@@ -1,0 +1,73 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- TABLA 1: productos
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS productos (
+    id          SERIAL PRIMARY KEY,
+    nombre      VARCHAR(200) NOT NULL,
+    categoria   VARCHAR(100),
+    precio_usd  DOUBLE PRECISION DEFAULT 0.0,
+    precio_ves  DOUBLE PRECISION DEFAULT 0.0,
+    activo      BOOLEAN DEFAULT TRUE,
+    creado_en   TIMESTAMP DEFAULT NOW()
+);
+
+
+-- ═══════════════════════════════════════════════════════════════════
+-- TABLA 2: tasas_cambio
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS tasas_cambio (
+    id          SERIAL PRIMARY KEY,
+    fuente      VARCHAR(50) NOT NULL,
+    tasa        DOUBLE PRECISION NOT NULL,
+    timestamp   TIMESTAMP DEFAULT NOW()
+);
+
+
+-- ═══════════════════════════════════════════════════════════════════
+-- TABLA 3: log_cambios
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS log_cambios (
+    id                SERIAL PRIMARY KEY,
+    producto_id       INTEGER,
+    producto_nombre   VARCHAR(200),
+    precio_antes      DOUBLE PRECISION,
+    precio_despues    DOUBLE PRECISION,
+    variacion_pct     DOUBLE PRECISION,
+    tasa_usada        DOUBLE PRECISION,
+    aprobado          BOOLEAN,
+    timestamp         TIMESTAMP DEFAULT NOW()
+);
+
+
+-- ═══════════════════════════════════════════════════════════════════
+-- ÍNDICES (para que las búsquedas sean rápidas)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE INDEX IF NOT EXISTS idx_productos_activo
+    ON productos(activo);
+
+CREATE INDEX IF NOT EXISTS idx_tasas_fuente_fecha
+    ON tasas_cambio(fuente, timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_log_producto
+    ON log_cambios(producto_id);
+
+
+-- ═══════════════════════════════════════════════════════════════════
+-- DATOS DE PRUEBA (5 productos)
+-- ═══════════════════════════════════════════════════════════════════
+INSERT INTO productos (nombre, categoria, precio_usd, precio_ves) VALUES
+    ('Televisor 42 pulgadas',  'electronica',       250.0, 0),
+    ('Nevera 14 pies',         'electrodomesticos', 400.0, 0),
+    ('Laptop básica',          'electronica',       350.0, 0),
+    ('Microondas 700W',        'electrodomesticos', 80.0,  0),
+    ('Audífonos Bluetooth',    'electronica',       30.0,  0);
+
+
+-- ═══════════════════════════════════════════════════════════════════
+-- VERIFICACIÓN: ¿Se crearon bien?
+-- ═══════════════════════════════════════════════════════════════════
+SELECT 'productos'    AS tabla, COUNT(*) AS filas FROM productos
+UNION ALL
+SELECT 'tasas_cambio' AS tabla, COUNT(*) AS filas FROM tasas_cambio
+UNION ALL
+SELECT 'log_cambios'  AS tabla, COUNT(*) AS filas FROM log_cambios;
