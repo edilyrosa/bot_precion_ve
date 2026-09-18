@@ -1,83 +1,89 @@
-# def actualizar_precios_ves():
-#     pass
-# def grardar_log():
-#     pass
-# def get_session():
-#     pass
-# def obtener_productos():
-#     pass
-# def guardar_tasa():
-#     pass 
-# def obtener_ultima_tasa():
-#     pass
-
-
-
 # db/database.py
 from contextlib import contextmanager
+from typing import List
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from loguru import logger
 
-from db.models import Base, Producto, TasaCambio, LogCambio
+from db.models import Base, Producto, TasasCambio, LogCambio
 from config import DATABASE_URL
 
-#* ─── CONEXIÓN ────────────────────────────────────────────────────────
-engine = create_engine(             #? El "motor" de conexión a la BD
-    DATABASE_URL,                   # La cadena de conexión a Supabase
-    echo=False,                     # No imprime cada SQL en consola (si True, lo imprime)
-    pool_pre_ping=True,             # Antes de usar una conexión, verifica que siga viva
-    pool_size=5,                    # Mantiene 5 conexiones abiertas listas para usar
-    max_overflow=10,                # Si las 5 están ocupadas, abre hasta 10 más
-    pool_recycle=3600,              # Renueva cada conexión después de 1 hora
+# #* ─── CONEXIÓN ────────────────────────────────────────────────────────
+#? motor con el que se crean las la conexion de la BBDD
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,  # Muestra las consultas SQL en la consola
+    pool_pre_ping=True,  # Verifica que la conexión este bien antes de usarla
+    pool_size= 5,  # Tamaño del pool de conexiones
+    max_overflow= 10,  # Máximo de conexiones adicionales que se pueden crear
+    pool_recycle= 3600,  # Tiempo en segundos para reciclar conexiones, 1 hora
 )
-Session = sessionmaker(bind=engine)  #? La "fábrica" de sesiones individuales para cada operación conectadas a ese motor.
 
-# session = Session() # 1. Creas una sesión
-# session.query(TABLA).all() 2. Usas la sesión, tomando una conexión del pool.
-# session.close()3. Cierras la sesión (devuelve la conexión al pool)
+#? produce las sessiones individuales (por cada operacion CRUD) para interactuar con la BBDD, 
+Session = sessionmaker(bind=engine)
+#? cual es el proceso?
+#& 1. creamos la sesion
+# session = Session()
+#& 2.usamos la sesion
+# session.query(sql)
+# session.query(Producto)
+#& 3. cerramos la sesion
+# session.close()
 
 @contextmanager
-def get_session():
-    """Abre y cierra la sesión automáticamente."""
+def get_session(): # para abrir y cerra autometicamente la sesion
     session = Session()
     try:
         yield session
-        session.commit()
-    except Exception:
-        session.rollback()
+        session.commit()  # Confirma los cambios si no hay errores
+    except Exception as e:
+        session.rollback() ## Deshace los cambios si hay errores
         raise
     finally:
-        session.close()
+        session.close()  # Cierra la sesión al final 
 
-
-def init_db():
-    """Crea las tablas si no existen."""
+def init_db(): #Crear las las tablas potr si no existen.
     Base.metadata.create_all(engine)
-    logger.info("Base de datos inicializada.")
+    logger.info("Tablas de la base de datos inicializadas correctamente.") 
+    
 
+# #* ─── PRODUCTOS ───────────────────────────────────────────────────────
 
-#* ─── PRODUCTOS ───────────────────────────────────────────────────────
-def obtener_productos_activos() -> list: # Func que usaremos en bot/telegram_bot.py para mostrar los productos activos en el menú
-    with get_session() as session: # get_session() la acabamos de crear arriba, es un context manager que abre y cierra la sesión automáticamente.
-        productos = ( # La llamada a esta Fucn retorna una lista de objetos Producto, activos (activo=True) y ordenados por id ascendente.
-            session.query(Producto) #  → SELECT * FROM productos
+def obtener_productos_activos() -> List:  
+    with get_session() as session: 
+        productos = (
+            session.query(Producto)  #SELECT FROM * productos WHERE activo = true
             .filter(Producto.activo == True)
             .order_by(Producto.id.asc())
             .all()
         )
         for p in productos:
-            session.expunge(p) # Desvinculacada ele de la sesión, para que no se cierre al salir del context manager.
+            session.expunge(p)  # Desvincula el objeto de la sesión para evitar problemas de cierre
         return productos
-
+            
+#TODO def obtener_producto_por_id() -> List:   
+#TODO def actualizar_producto()
+#TODO ─── PRODUCTOS ───────────────────────────────────────────────────────
 
 def obtener_producto_por_id(producto_id: int):
+    """Devuelve un producto por su ID, o None si no existe."""
     with get_session() as session:
         producto = session.get(Producto, producto_id)
         if producto:
-            session.expunge(producto)
+            session.expunge(producto)  # Desvincula antes de cerrar la sesión
         return producto
 
+def actualizar_producto(producto_id: int, precio_usd: float = None, precio_ves: float = None) -> None:
+    """Actualiza precio USD y/o VES de un producto. Solo cambia los valores que se pasen."""
+    with get_session() as session:
+        producto = session.get(Producto, producto_id)
+        if not producto:
+            return
+        if precio_usd is not None:
+            producto.precio_usd = precio_usd
+        if precio_ves is not None:
+            producto.precio_ves = precio_ves
+    logger.info(f"Producto ID {producto_id} actualizado.")
 
 
 

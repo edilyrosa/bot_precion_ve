@@ -6,12 +6,16 @@
 # python -m pip install loguru 
 
 import asyncio
+from flask import app
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
 from loguru import logger
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, UMBRAL_VARIACION
 # from db.database import actualizar_precios_ves, grardar_log, get_session, obtener_productos, guardar_tasa, obtener_ultima_tasa
-from db.database import obtener_productos_activos
+from db.database import obtener_productos_activos, actualizar_producto, obtener_producto_por_id
+
+
+
 #* ----------ESTADOS -------------------------------------
 ESPERANDO_UMBRAL              = 1
 ESPERANDO_TASA_MANUAL         = 2
@@ -31,11 +35,11 @@ def menu_principal_keyboard():
         [InlineKeyboardButton("✏️Editar precio", callback_data="menu_editar_productos")], # U
         [InlineKeyboardButton("🌀Forzar consulta BCV", callback_data="menu_forzar_bcv")], # R
         [InlineKeyboardButton("💲Tasa manual", callback_data="menu_tasa_manual")], #? U
-        [InlineKeyboardButton("💡Cambiar umbral", callback_data="cambiar_umbral")], # U
-        [InlineKeyboardButton("📊Ver tasa actual", callback_data="ver_tasa")], # R
+        [InlineKeyboardButton("💡Cambiar umbral", callback_data="menu_cambiar_umbral")], # U # TODO: greggar menu_
+        [InlineKeyboardButton("📊Ver tasa actual", callback_data="menu_ver_tasa")], # R      # TODO: greggar menu_
     ]
     if _tasa_es_manual:
-        botones.append([InlineKeyboardButton("Restablecer tasa BCV", callback_data="restablecer_bcv")])
+        botones.append([InlineKeyboardButton("Restablecer tasa BCV", callback_data="menu_restablecer_bcv")])
     
     return InlineKeyboardMarkup(botones) #Botoneta contenedor de los BOTONES 
 
@@ -65,11 +69,69 @@ async def cdm_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=menu_principal_keyboard()
     )
     
+#* ─── FLUJO DEL MANEJADOR DE BOTONES ─────────────────────────────────────────────────────
+# Usuario presiona "📦Ver productos"
+#           ↓
+# Telegram envía un "CallbackQuery" al bot, es una notificacion para que sepa que paso este tipo de interaccion
+#           ↓
+# Se ejecuta manejar_menu(update, context) #TODO: Hay que crearla, para saber q tbn clickeo usuario 🤔⁉️
+#           ↓
+# update.callback_query  →  info del clic
+#           ↓
+# query.answer()  →  confirma recepción a Telegram, NECESARIA
+#           ↓
+# query.data  →  "menu_ver_productos", "menu_editar_productos", ...
+#           ↓
+# if data == "menu_ver_productos":  →  entra al bloque
+#           ↓
+# ... muestra los productos
 
+#* ─── FUNC MANEJADORA DEL MENU - BOTONERA ───────
+async def maneja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()  # Confirma la recepción del clic al usuario
+    data = query.data
+    
+    #* ─── MANEJO DEL CLIC SOBRE EL BTN "ver productos" ───────
+    if data == "menu_ver_productos":
+        productos =  obtener_productos_activos()
+        if not productos:
+            await query.edit_message_text('No hay productos en la DB que mostrar.') #Modificara el text label del btn, que esta generando el obj "Update"
+            return
+        lineas = ["📦 Productos activos:"]
+        for p in  productos:
+            lineas.append(
+                f'ID {p.id} — {p.nombre}\n'
+                f'💵 USD: {p.precio_usd} $ | 🇻🇪 VES: {p.precio_ves} Bs'
+                )
+        lineas.append('\nUsa /menu para volver.')
+            
+        await query.edit_message_text('\n'.join(lineas), parse_mode='Markdown') #Modificara el text label del btn, que esta generando el obj "Update"
+    
+    #TODO ─── ******************MANEJO DEL CLIC SOBRE EL BTN "ver productos" *******************───────
+    if data == "menu_editar_productos":
+        # 1. le muestro todos lols productos con su id, para q me indique el id
+        # 2. obtengo de usuario el id de usuario, lo guado en una var y se lo paso a la func para obtener el proc que se desea acctualzar
+        
+        # tengo que conseguir el id, del chat
+        producto =  obtener_producto_por_id(id)
+        actualizar_producto(2, 200)
+    
+    
+    #* ─── MANEJO DEL CLIC SOBRE CUALQUIER OTRO BOTON ─────── 
+    else:  
+        await query.edit_message_text(f' ⚠️ `{data}` no ha sido implemantado aun. \nUsa /menu para volver.', parse_mode='Markdown') #Modificara el text label del btn, que esta generando el obj "Update"
+
+        
+        
+    
 #* ─── ARRANQUE ─────────────────────────────────────────────────────────────────
 def iniciar_bot():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler('start', cdm_start))
     app.add_handler(CommandHandler('menu', cdm_menu))
+    app.add_handler(CallbackQueryHandler (maneja_menu, pattern="^menu_"))  # Maneja los clics en los botones del menú
+    
     logger.info('Bot de telegran iniciado. Esperando comandos...')
     app.run_polling(allowed_updates=Update.ALL_TYPES)  # Inicia el bot y espera comandos de los usuarios
+    

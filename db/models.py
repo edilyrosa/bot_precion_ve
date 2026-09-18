@@ -17,6 +17,7 @@ class Producto(Base):
     precio_usd = Column(Float, default=0.0)
     precio_ves = Column(Float, default=0.0)
     activo = Column(Boolean, default=True) 
+    # creado_en  = Column(DateTime, default=datetime.utcnow)   # TODO ← AGREGAR ESTA LÍNEA
     
 class TasasCambio(Base):
     __tablename__    = 'tasas_cambio'  

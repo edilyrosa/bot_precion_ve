@@ -52,7 +52,7 @@ def init_db(): #Crear las las tablas potr si no existen.
 def obtener_productos_activos() -> List:  
     with get_session() as session: 
         productos = (
-            session.query(Producto)  #SELECT FROM * productos WHERE activo = true
+            session.query(Producto)  # SELECT FROM * productos WHERE activo = true
             .filter(Producto.activo == True)
             .order_by(Producto.id.asc())
             .all()
@@ -61,5 +61,25 @@ def obtener_productos_activos() -> List:
             session.expunge(p)  # Desvincula el objeto de la sesión para evitar problemas de cierre
         return productos
             
-#TODO def obtener_productos_por_id() -> List:   
+#TODO def obtener_producto_por_id(), actualizar_producto() -> List:   
+def obtener_producto_por_id(producto_id:int):
+        with get_session() as session: 
+            producto = session.get(Producto, producto_id)  #SELECT FROM * productos WHERE activo = true
+            if producto:
+                session.expunge(producto)  # Desvincula el objeto de la sesión para evitar problemas de cierre 
+            return producto
+
+
+def actualizar_producto(producto_id:int, precio_usd:float =None, precio_ves:float=None):
+    #Actualizar el precio en USD o VES de un producto en la base de datos, Y SOLOL ESOS CAMPOS
+    with get_session() as session:  
+        producto = session.get(Producto, producto_id)  #SELECT FROM * productos WHERE activo = true
+        if not producto:
+            return None  # Producto no encontrado
         
+        if precio_usd is not None:
+            producto.precio_usd = precio_usd
+        if precio_ves is not None:
+            producto.precio_ves = precio_ves
+    logger.info(f"Producto {producto_id} actualizado: precio_usd={precio_usd}, precio_ves={precio_ves}")
+
