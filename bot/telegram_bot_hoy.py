@@ -12,7 +12,10 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 from loguru import logger
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, UMBRAL_VARIACION
 # from db.database import actualizar_precios_ves, grardar_log, get_session, obtener_productos, guardar_tasa, obtener_ultima_tasa
-from db.database import obtener_productos_activos, actualizar_producto, obtener_producto_por_id, obtener_ultima_tasa 
+
+#TODO: from db.database import obtener_productos_activos, actualizar_producto, obtener_producto_por_id, 
+from db.database import obtener_productos_activos, actualizar_producto, obtener_producto_por_id, obtener_ultima_tasa #TODO
+
 
 
 #* ----------ESTADOS -------------------------------------
@@ -87,6 +90,7 @@ async def cdm_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 #* ─── FUNC MANEJADORA DEL MENU - BOTONERA ───────
 async def maneja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    #global _tasa_es_manual        #TODO ← AGREGAR ESTA LÍNEA, luego hare _tasa_es_manual = False localmente
     query = update.callback_query
     await query.answer()  #* Confirma la recepción del clic al usuario
     data = query.data
@@ -121,21 +125,23 @@ async def maneja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text('\n'.join(lineas), parse_mode='Markdown')
         return ESPERANDO_PRODUCTO_ID
 
-    
-    
+#TODO ───
+    #* ── Ver tasa actual ────────────────────────────────────────────────────────
     elif data == "menu_ver_tasa":
-        tasa = obtener_ultima_tasa('BCV')
-        origen = "Establecida manualmente " if _tasa_es_manual else "BCV"
+        tasa   = obtener_ultima_tasa("BCV") #* Obtenemos la tasa GUARDADA en la BBDD, que podria ser del banco o manual.
+        origen = "⚠️ establecida manualmente" if _tasa_es_manual else "🏦 BCV" #* Texto que indica la fuente (banco o manual)
         if tasa:
-            await query.edit_message_text( #modifica el text del btn
-                f"Tasa Actual: *{tasa:,.4f}* Bs/USD\n"
-                f"Origen: *{origen}* \n Usa /menu para volver",
-                parse_mode="Markdown"
+            await query.edit_message_text( #* Modifica el texto del Btn
+                f"💱 *Tasa actual:* {tasa:,.4f} Bs/USD\n"
+                f"Origen: {origen}\n\nUsa /menu para volver.",
+                parse_mode="Markdown" 
             )
         else:
-            await query.edit_message_text('No hay tasa registrada aun')
-            return ConversationHandler.END
-            
+            await query.edit_message_text("No hay tasa registrada aún.") 
+        return ConversationHandler.END #* Termina la interacción.
+#TODO ───
+    
+    
     #* ─── MANEJO DEL CLIC SOBRE CUALQUIER OTRO BOTON ─────── 
     else:  
         await query.edit_message_text(f' ⚠️ `{data}` no ha sido implemantado aun. \nUsa /menu para volver.', parse_mode='Markdown') #Modificara el text label del btn, que esta generando el obj "Update"
@@ -151,7 +157,7 @@ async def recibir_producto_id(update: Update, context: ContextTypes.DEFAULT_TYPE
         #* si hay producto vamos a guarda info en el contexto del bot
         context.user_data['producto_id'] = producto.id # este dato lo vamos y podemos usar en otras funciones.
         context.user_data['producto_nombre'] = producto.nombre # este dato lo vamos y podemos usar en otras funciones.
-        teclado = InlineKeyboardMarkup([
+        teclado = InlineKeyboardMarkup([ # & AGREGAR: [] *********** MATRIZ: [InlineKeyboardButton("💵 Cambiar precio USD",  callback_data="editar_usd")], 
             [InlineKeyboardButton( 'Cambiar precios USD',callback_data='editar_usd')],
             [InlineKeyboardButton( 'Cambiar precios VES',callback_data='editar_ves')],
             [InlineKeyboardButton( 'Cancelar',           callback_data='editar_cancelar')]
@@ -175,6 +181,8 @@ async def manejar_edicion(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()  #* Confirma la recepción del clic al usuario
         modo = query.data
         if modo == "editar_cancelar":
+            #& SUSTITUTIR POR: ****************************** query.edit_message_text()
+            #!await update.message.reply_text('Edicion cancelada.')
             await query.edit_message_text('❌ Edicion cancelada. Usa /menu')
             return ConversationHandler.END
         
@@ -201,89 +209,79 @@ async def recibir_precio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if modo == 'editar_usd':
             actualizar_producto(prod_id, precio_usd=valor)
             await update.message.reply_text(f' USD Actualizado a {valor} $')
+            #& AGREGAR: ********************************** return ConversationHandler.END  
             return ConversationHandler.END
         
-        
+        #TODO: TERMINEMOS DE ESCRIBIR ESTA FUNCION
         elif modo == 'editar_ves':
             actualizar_producto(prod_id, precio_ves=valor)
             await update.message.reply_text(f' VES Actualizado a {valor} Bs.')
             return ConversationHandler.END
-    except ValueError:
-        await update.message.reply_text('Escribe un numero valido') 
-        return ESPERANDO_VALOR_PRECIO
+            
+        # todo: QUEDAMOS AQUI
+    except:
+        # todo: QUEDAMOS AQUI
+        print('An exception occurred')    
     
 
 
 #TODO ─── LÓGICA: EVALUAR TASA Y PROPONER AJUSTES ─────────────────────────
-async def _evaluar_y_proponer(bot, tasa_nueva: float):
-    """
-    Calcula propuestas con la tasa dada y las envía a Telegram si superan el umbral.
-    Usa _umbral_actual (puede haber sido cambiado desde el menú).
-    """
-    from engine.price_engine import calcular_propuestas, formatear_mensaje_propuesta
+# async def _evaluar_y_proponer(bot, tasa_nueva: float):
+#     """
+#     Calcula propuestas con la tasa dada y las envía a Telegram si superan el umbral.
+#     Usa _umbral_actual (puede haber sido cambiado desde el menú).
+#     """
+#     from engine.price_engine import calcular_propuestas, formatear_mensaje_propuesta
 
-    propuestas = calcular_propuestas(tasa_nueva, umbral=_umbral_actual)
-    mensaje    = formatear_mensaje_propuesta(propuestas, tasa_nueva)
+#     propuestas = calcular_propuestas(tasa_nueva, umbral=_umbral_actual)
+#     mensaje    = formatear_mensaje_propuesta(propuestas, tasa_nueva)
 
-    global _propuestas_pendientes
-    _propuestas_pendientes = {p["producto_id"]: p for p in propuestas}
+#     global _propuestas_pendientes
+#     _propuestas_pendientes = {p["producto_id"]: p for p in propuestas}
 
-    if not propuestas:
-        await bot.send_message(
-            chat_id=TELEGRAM_CHAT_ID, text=mensaje, parse_mode="Markdown"
-        )
-        return
+#     if not propuestas:
+#         await bot.send_message(
+#             chat_id=TELEGRAM_CHAT_ID, text=mensaje, parse_mode="Markdown"
+#         )
+#         return
 
-    botones = []
-    for p in propuestas:
-        botones.append([
-            InlineKeyboardButton(f"✅ {p['nombre'][:20]}", callback_data=f"ap_{p['producto_id']}"),
-            InlineKeyboardButton("❌ Rechazar",             callback_data=f"re_{p['producto_id']}"),
-        ])
-    botones.append([
-        InlineKeyboardButton("✅ Aprobar TODOS",  callback_data="ap_all"),
-        InlineKeyboardButton("❌ Rechazar TODOS", callback_data="re_all"),
-    ])
+#     botones = []
+#     for p in propuestas:
+#         botones.append([
+#             InlineKeyboardButton(f"✅ {p['nombre'][:20]}", callback_data=f"ap_{p['producto_id']}"),
+#             InlineKeyboardButton("❌ Rechazar",             callback_data=f"re_{p['producto_id']}"),
+#         ])
+#     botones.append([
+#         InlineKeyboardButton("✅ Aprobar TODOS",  callback_data="ap_all"),
+#         InlineKeyboardButton("❌ Rechazar TODOS", callback_data="re_all"),
+#     ])
 
-    await bot.send_message(
-        chat_id=TELEGRAM_CHAT_ID, text=mensaje,
-        reply_markup=InlineKeyboardMarkup(botones), parse_mode="Markdown"
-    )
-    logger.info(f"Propuestas enviadas: {len(propuestas)} productos.")
-#! BORAR
+#     await bot.send_message(
+#         chat_id=TELEGRAM_CHAT_ID, text=mensaje,
+#         reply_markup=InlineKeyboardMarkup(botones), parse_mode="Markdown"
+#     )
+#     logger.info(f"Propuestas enviadas: {len(propuestas)} productos.")
+# #! BORAR
+
 #* ─── ARRANQUE ─────────────────────────────────────────────────────────────────
 def iniciar_bot():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler('start', cdm_start))
-    #TODO: app.add_handler(CommandHandler('menu', cdm_menu)) 
-    #TODO: app.add_handler(CallbackQueryHandler(maneja_menu, pattern="^menu_"))  # Maneja los clics en los botones del menú
-        
-    #TODO EXPLICACION DEL MANEJADOR DE CONVERSACIONES QUE AMERITAN PASOS 
-    #     conv = ConversationHandler(
-    #     entry_points=[...],      # 🚪 Cómo EMPIEZA la conversación → Si usuario escribe /menu || clic en data == "menu_..."  empieza la conversación
-    #     states={ESTASO (QUE HAHO)...},            # 📍 Los PASOS intermedios
-    #     fallbacks=[...],         # 🆘 Cómo SALIR en cualquier momento
-    #     allow_reentry=True,      # 🔄 Puede reiniciarse
-    # )
-    # app.add_handler(conv)        # Registra el handler en el bot
-
 
     conv = ConversationHandler(
         entry_points=[
-            CommandHandler('menu', cdm_menu),
-            CallbackQueryHandler(maneja_menu, pattern="^menu_")
+            CommandHandler("menu", cdm_menu),
+            CallbackQueryHandler(maneja_menu, pattern="^menu_"),
         ],
         states={
-            ESPERANDO_PRODUCTO_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_producto_id)],  #Retorno 3 → manejador de q pasa manehado con la funcion.
-            ESPERANDO_MODO_EDICION:[CallbackQueryHandler(manejar_edicion, pattern="^editar_")], #4
-            ESPERANDO_VALOR_PRECIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_precio)]
+            ESPERANDO_PRODUCTO_ID:  [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_producto_id)],
+            ESPERANDO_MODO_EDICION: [CallbackQueryHandler(manejar_edicion, pattern="^editar_")],
+            ESPERANDO_VALOR_PRECIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_precio)],
         },
-        fallbacks=[CommandHandler('menu', cdm_menu)],
+        fallbacks=[CommandHandler("menu", cdm_menu)],
         allow_reentry=True,
     )
-    
     app.add_handler(conv)
 
-    logger.info('Bot de telegran iniciado. Esperando comandos...')
-    app.run_polling(allowed_updates=Update.ALL_TYPES)  # Inicia el bot y espera comandos de los usuarios
-    
+    logger.info('Bot de Telegram iniciado.')
+    app.run_polling(allowed_updates=Update.ALL_TYPES)

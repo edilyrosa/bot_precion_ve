@@ -8,6 +8,7 @@ from loguru import logger
 from db.models import Base, Producto, TasasCambio, LogCambio
 from config import DATABASE_URL
 
+
 # #* ─── CONEXIÓN ────────────────────────────────────────────────────────
 #? motor con el que se crean las la conexion de la BBDD
 engine = create_engine(
@@ -83,3 +84,57 @@ def actualizar_producto(producto_id:int, precio_usd:float =None, precio_ves:floa
             producto.precio_ves = precio_ves
     logger.info(f"Producto {producto_id} actualizado: precio_usd={precio_usd}, precio_ves={precio_ves}")
 
+def obtener_ultima_tasa(fuente:str = "BCV") -> float | None:
+    with get_session() as session:
+        registro = (
+            session.query(TasasCambio)
+            .filter(TasasCambio.fuente == fuente)
+            .order_by(TasasCambio.timestamp.desc())
+            .first()
+        ) #esto es todo el ultimo registro cuyo campo fuente == parametro pasado || "BCV"
+        
+        return registro.tasa if registro else None
+
+# para aca volveremos!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # # & DESPUES: ───
+# def guardar_tasa(fuente: str, tasa: float) -> None:
+#     with get_session() as session:
+#         session.add(TasasCambio(fuente=fuente, tasa=tasa))   # ← ojo: TasasCambio
+#     logger.info(f"Tasa guardada: {fuente} = {tasa}")
+
+# # ─── CRUD PRODUCTOS (faltaba) ────────────────────────────────────────
+# def actualizar_precio_ves(producto_id: int, precio_nuevo: float) -> None:
+#     with get_session() as session:
+#         producto = session.get(Producto, producto_id)
+#         if producto:
+#             producto.precio_ves = precio_nuevo
+#     logger.info(f"Precio VES actualizado: ID {producto_id} → {precio_nuevo}")

@@ -12,7 +12,9 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 from loguru import logger
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, UMBRAL_VARIACION
 # from db.database import actualizar_precios_ves, grardar_log, get_session, obtener_productos, guardar_tasa, obtener_ultima_tasa
-from db.database import obtener_productos_activos, actualizar_producto, obtener_producto_por_id, obtener_ultima_tasa 
+#TODO: from db.database import obtener_productos_activos, actualizar_producto, obtener_producto_por_id, 
+from db.database import obtener_productos_activos, actualizar_producto, obtener_producto_por_id, guardar_tasa, obtener_ultima_tasa, actualizar_precio_ves
+from scraper.bcv import obtener_tasa_bcv   #TODO
 
 
 #* ----------ESTADOS -------------------------------------
@@ -87,6 +89,7 @@ async def cdm_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 #* ─── FUNC MANEJADORA DEL MENU - BOTONERA ───────
 async def maneja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global _tasa_es_manual        #TODO ← AGREGAR ESTA LÍNEA
     query = update.callback_query
     await query.answer()  #* Confirma la recepción del clic al usuario
     data = query.data
@@ -123,19 +126,61 @@ async def maneja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     
     
+#TODO ───
+    #* ── Ver tasa actual ────────────────────────────────────────────────────────
     elif data == "menu_ver_tasa":
-        tasa = obtener_ultima_tasa('BCV')
-        origen = "Establecida manualmente " if _tasa_es_manual else "BCV"
+        tasa   = obtener_ultima_tasa("BCV") #* Get de BBDD
+        origen = "⚠️ establecida manualmente" if _tasa_es_manual else "🏦 BCV"
         if tasa:
-            await query.edit_message_text( #modifica el text del btn
-                f"Tasa Actual: *{tasa:,.4f}* Bs/USD\n"
-                f"Origen: *{origen}* \n Usa /menu para volver",
-                parse_mode="Markdown"
+            await query.edit_message_text( # Modifica el texto del Btn con Uso *negrita* y _cursiva_.
+                f"💱 *Tasa actual:* {tasa:,.4f} Bs/USD\n"
+                f"Origen: {origen}\n\nUsa /menu para volver.",
+                parse_mode="Markdown" #Uso *negrita* y _cursiva_.
             )
         else:
-            await query.edit_message_text('No hay tasa registrada aun')
-            return ConversationHandler.END
-            
+            await query.edit_message_text("No hay tasa registrada aún.") # Modifica el texto del Btn.
+        return ConversationHandler.END #* Termina la interacción.
+
+    #* ── Forzar consulta BCV ───────────────────────────────────────────
+    elif data == "menu_forzar_bcv":
+        await query.edit_message_text("🔄 Consultando tasa BCV...")
+        tasa = obtener_tasa_bcv()
+        if tasa:
+            guardar_tasa("BCV", tasa)
+            _tasa_es_manual = False
+            await _evaluar_y_proponer(context.bot, tasa)
+        else:
+            await context.bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text="❌ No se pudo obtener la tasa del BCV. Intenta con 💱 Tasa manual."
+            )
+        return ConversationHandler.END
+    
+    
+        #* ── Restablecer tasa BCV ──────────────────────────────────────────
+    elif data == "menu_restablecer_bcv":
+        await query.edit_message_text("🔄 Restableciendo tasa desde el BCV...")
+        tasa = obtener_tasa_bcv()
+        if tasa:
+            guardar_tasa("BCV", tasa)
+            _tasa_es_manual = False
+            await context.bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text=f"✅ Tasa restablecida desde el BCV: *{tasa:,.4f} Bs/USD*\n\nUsa /menu para más opciones.",
+                parse_mode="Markdown"
+            )
+            await _evaluar_y_proponer(context.bot, tasa)
+        else:
+            await context.bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text="❌ No se pudo conectar al BCV. La tasa manual sigue activa."
+            )
+        return ConversationHandler.END
+
+ #TODO ───
+    
+    
+    
     #* ─── MANEJO DEL CLIC SOBRE CUALQUIER OTRO BOTON ─────── 
     else:  
         await query.edit_message_text(f' ⚠️ `{data}` no ha sido implemantado aun. \nUsa /menu para volver.', parse_mode='Markdown') #Modificara el text label del btn, que esta generando el obj "Update"
@@ -151,7 +196,7 @@ async def recibir_producto_id(update: Update, context: ContextTypes.DEFAULT_TYPE
         #* si hay producto vamos a guarda info en el contexto del bot
         context.user_data['producto_id'] = producto.id # este dato lo vamos y podemos usar en otras funciones.
         context.user_data['producto_nombre'] = producto.nombre # este dato lo vamos y podemos usar en otras funciones.
-        teclado = InlineKeyboardMarkup([
+        teclado = InlineKeyboardMarkup([ # & AGREGAR: [] *********** MATRIZ: [InlineKeyboardButton("💵 Cambiar precio USD",  callback_data="editar_usd")], 
             [InlineKeyboardButton( 'Cambiar precios USD',callback_data='editar_usd')],
             [InlineKeyboardButton( 'Cambiar precios VES',callback_data='editar_ves')],
             [InlineKeyboardButton( 'Cancelar',           callback_data='editar_cancelar')]
@@ -175,6 +220,8 @@ async def manejar_edicion(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()  #* Confirma la recepción del clic al usuario
         modo = query.data
         if modo == "editar_cancelar":
+            #& SUSTITUTIR POR: ****************************** query.edit_message_text()
+            #!await update.message.reply_text('Edicion cancelada.')
             await query.edit_message_text('❌ Edicion cancelada. Usa /menu')
             return ConversationHandler.END
         
@@ -201,16 +248,19 @@ async def recibir_precio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if modo == 'editar_usd':
             actualizar_producto(prod_id, precio_usd=valor)
             await update.message.reply_text(f' USD Actualizado a {valor} $')
+            #& AGREGAR: ********************************** return ConversationHandler.END  
             return ConversationHandler.END
         
-        
+        #TODO: TERMINEMOS DE ESCRIBIR ESTA FUNCION
         elif modo == 'editar_ves':
             actualizar_producto(prod_id, precio_ves=valor)
             await update.message.reply_text(f' VES Actualizado a {valor} Bs.')
             return ConversationHandler.END
-    except ValueError:
-        await update.message.reply_text('Escribe un numero valido') 
-        return ESPERANDO_VALOR_PRECIO
+            
+        # todo: QUEDAMOS AQUI
+    except:
+        # todo: QUEDAMOS AQUI
+        print('An exception occurred')    
     
 
 
@@ -255,35 +305,21 @@ async def _evaluar_y_proponer(bot, tasa_nueva: float):
 def iniciar_bot():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler('start', cdm_start))
-    #TODO: app.add_handler(CommandHandler('menu', cdm_menu)) 
-    #TODO: app.add_handler(CallbackQueryHandler(maneja_menu, pattern="^menu_"))  # Maneja los clics en los botones del menú
-        
-    #TODO EXPLICACION DEL MANEJADOR DE CONVERSACIONES QUE AMERITAN PASOS 
-    #     conv = ConversationHandler(
-    #     entry_points=[...],      # 🚪 Cómo EMPIEZA la conversación → Si usuario escribe /menu || clic en data == "menu_..."  empieza la conversación
-    #     states={ESTASO (QUE HAHO)...},            # 📍 Los PASOS intermedios
-    #     fallbacks=[...],         # 🆘 Cómo SALIR en cualquier momento
-    #     allow_reentry=True,      # 🔄 Puede reiniciarse
-    # )
-    # app.add_handler(conv)        # Registra el handler en el bot
-
 
     conv = ConversationHandler(
         entry_points=[
-            CommandHandler('menu', cdm_menu),
-            CallbackQueryHandler(maneja_menu, pattern="^menu_")
+            CommandHandler("menu", cdm_menu),
+            CallbackQueryHandler(maneja_menu, pattern="^menu_"),
         ],
         states={
-            ESPERANDO_PRODUCTO_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_producto_id)],  #Retorno 3 → manejador de q pasa manehado con la funcion.
-            ESPERANDO_MODO_EDICION:[CallbackQueryHandler(manejar_edicion, pattern="^editar_")], #4
-            ESPERANDO_VALOR_PRECIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_precio)]
+            ESPERANDO_PRODUCTO_ID:  [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_producto_id)],
+            ESPERANDO_MODO_EDICION: [CallbackQueryHandler(manejar_edicion, pattern="^editar_")],
+            ESPERANDO_VALOR_PRECIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_precio)],
         },
-        fallbacks=[CommandHandler('menu', cdm_menu)],
+        fallbacks=[CommandHandler("menu", cdm_menu)],
         allow_reentry=True,
     )
-    
     app.add_handler(conv)
 
-    logger.info('Bot de telegran iniciado. Esperando comandos...')
-    app.run_polling(allowed_updates=Update.ALL_TYPES)  # Inicia el bot y espera comandos de los usuarios
-    
+    logger.info('Bot de Telegram iniciado.')
+    app.run_polling(allowed_updates=Update.ALL_TYPES)

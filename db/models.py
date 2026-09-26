@@ -19,8 +19,8 @@ class Producto(Base):
     activo = Column(Boolean, default=True) 
     # creado_en  = Column(DateTime, default=datetime.utcnow)   # TODO ← AGREGAR ESTA LÍNEA
     
-class TasasCambio(Base):
-    __tablename__    = 'tasas_cambio'  
+class TasasCambio(Base): 
+    __tablename__    = 'tasas'  
     id              = Column(Integer, primary_key=True, autoincrement=True)
     fuente           = Column(String(50), nullable=False)
     tasa             = Column(Float, nullable=False)
